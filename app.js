@@ -4,8 +4,8 @@ import employeesRouter from "./routes/employees.js";
 const app = express();
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("Hello employees!");
+app.get("/", (request, response) => {
+  response.send("Hello employees!");
 });
 
 app.use("/employees", employeesRouter);

@@ -1,49 +1,73 @@
 import express from "express";
-import employees from "#db/employees";
+import {
+  createEmployee,
+  deleteEmployeeById,
+  getAllEmployees,
+  getEmployeeById,
+  getRandomEmployee,
+  isValidEmployeeName,
+  updateEmployeeName,
+} from "#db/employees";
 
 const employeesRouter = express.Router();
 
 employeesRouter.get("/", (request, response) => {
-  response.json(employees);
+  const allEmployees = getAllEmployees();
+  response.json(allEmployees);
 });
 
-employeesRouter.get("/random", (req, res) => {
-  const randomIndex = Math.floor(Math.random() * employees.length);
-  const randomEmployee = employees[randomIndex];
-  res.json(randomEmployee);
+employeesRouter.get("/random", (request, response) => {
+  const randomEmployee = getRandomEmployee();
+  response.json(randomEmployee);
 });
 
-employeesRouter.get("/:id", (req, res) => {
-  const employeeId = Number(req.params.id);
-
-  const foundEmployee = employees.find((singleEmployee) => {
-    return singleEmployee.id === employeeId;
-  });
+employeesRouter.get("/:id", (request, response) => {
+  const employeeId = Number(request.params.id);
+  const foundEmployee = getEmployeeById(employeeId);
 
   if (foundEmployee) {
-    res.json(foundEmployee);
+    response.json(foundEmployee);
   } else {
-    res.status(404).send("Employee not found.");
+    response.status(404).send("Employee not found.");
   }
 });
 
 employeesRouter.post("/", (request, response) => {
   const providedName = request.body?.name;
 
-  if (typeof providedName !== "string" || providedName.trim() === "") {
+  if (!isValidEmployeeName(providedName)) {
     return response.status(400).send("Name is required.");
   }
 
-  const newEmployeeId = employees.length + 1;
-
-  const newEmployee = {
-    id: newEmployeeId,
-    name: providedName,
-  };
-
-  employees.push(newEmployee);
-
+  const newEmployee = createEmployee(providedName);
   response.status(201).json(newEmployee);
+});
+
+employeesRouter.put("/:id", (request, response) => {
+  const employeeId = Number(request.params.id);
+  const providedName = request.body?.name;
+
+  if (!isValidEmployeeName(providedName)) {
+    return response.status(400).send("A valid name is required.");
+  }
+
+  const updatedEmployee = updateEmployeeName(employeeId, providedName);
+
+  if (!updatedEmployee) {
+    return response.status(404).send("Employee not found.");
+  }
+
+  response.json(updatedEmployee);
+});
+
+employeesRouter.delete("/:id", (request, response) => {
+  const employeeId = Number(request.params.id);
+  const deletedEmployee = deleteEmployeeById(employeeId);
+  if (!deletedEmployee) {
+    return response.status(404).send("Employee not found.");
+  }
+
+  response.json(deletedEmployee);
 });
 
 export default employeesRouter;

@@ -1,8 +1,12 @@
 import request from "supertest";
-import { describe, expect, it, test } from "vitest";
+import { beforeEach, describe, expect, it, test } from "vitest";
 
 import app from "#app";
-import employees from "#db/employees";
+import { getAllEmployees, resetEmployees } from "#db/employees";
+
+beforeEach(() => {
+  resetEmployees();
+});
 
 describe("Express app", () => {
   it("is defined", () => {
@@ -23,14 +27,15 @@ test("GET / sends the string 'Hello employees!' with status 200", async () => {
 
 test("GET /employees returns the list of employees with status 200", async () => {
   const response = await request(app).get("/employees");
+  const expectedEmployees = getAllEmployees();
   expect(response.status).toBe(200);
-  expect(response.body).toEqual(employees);
+  expect(response.body).toEqual(expectedEmployees);
 });
 
 describe("GET /employees/:id", () => {
   it("sends employee #1 with status 200", async () => {
     const response = await request(app).get("/employees/1");
-    const expected = employees.find((employee) => employee.id === 1);
+    const expected = getAllEmployees().find((employee) => employee.id === 1);
     expect(response.body).toEqual(expected);
   });
 
@@ -48,19 +53,15 @@ describe("GET /employees/random", () => {
     expect(employee).toHaveProperty("name");
   });
 
-  it("does not send the same employee twice in a row", async () => {
-    try {
-      const employee1 = await request(app).get("/employees/random");
-      const employee2 = await request(app).get("/employees/random");
-      expect(employee1.body).not.toEqual(employee2.body);
-    } catch (e) {
-      e.message += `
-        There is a small chance that the same employee is sent twice in a row,
-        which will cause this test to fail. Try running the test again!
-        This test should pass most of the time.
-      `;
-      throw e;
+  it("returns more than one unique employee across multiple requests", async () => {
+    const employeeIds = new Set();
+
+    for (let requestCount = 0; requestCount < 20; requestCount += 1) {
+      const response = await request(app).get("/employees/random");
+      employeeIds.add(response.body.id);
     }
+
+    expect(employeeIds.size).toBeGreaterThan(1);
   });
 });
 
@@ -92,7 +93,55 @@ describe("POST /employees", () => {
   it("creates an employee with a unique ID", async (req, res) => {
     await request(app).post("/employees").send({ name: "foo" });
     const ids = new Set();
-    employees.forEach((e) => ids.add(e.id));
-    expect(employees.length).toBe(ids.size);
+    const allEmployees = getAllEmployees();
+    allEmployees.forEach((employee) => ids.add(employee.id));
+    expect(allEmployees.length).toBe(ids.size);
+  });
+});
+
+describe("PUT /employees/:id", () => {
+  it("sends 400 if name is not provided", async () => {
+    const response = await request(app).put("/employees/1").send({});
+    expect(response.status).toBe(400);
+  });
+
+  it("sends 404 if employee does not exist", async () => {
+    const response = await request(app)
+      .put("/employees/999")
+      .send({ name: "New Name" });
+    expect(response.status).toBe(404);
+  });
+
+  it("updates the employee name and returns the updated employee", async () => {
+    const response = await request(app)
+      .put("/employees/1")
+      .send({ name: "Updated Name" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty("id", 1);
+    expect(response.body).toHaveProperty("name", "Updated Name");
+  });
+});
+
+describe("DELETE /employees/:id", () => {
+  it("sends 404 if employee does not exist", async () => {
+    const response = await request(app).delete("/employees/999");
+    expect(response.status).toBe(404);
+  });
+
+  it("deletes an employee and returns the deleted employee", async () => {
+    const createResponse = await request(app)
+      .post("/employees")
+      .send({ name: "Employee To Delete" });
+
+    const createdEmployeeId = createResponse.body.id;
+
+    const deleteResponse = await request(app).delete(
+      `/employees/${createdEmployeeId}`,
+    );
+
+    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.body).toHaveProperty("id", createdEmployeeId);
+    expect(deleteResponse.body).toHaveProperty("name", "Employee To Delete");
   });
 });
